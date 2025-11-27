@@ -1,69 +1,51 @@
 import sqlglot
-from sqlglot import exp
-from typing import Dict, Any
+from sqlglot.expressions import Create, ColumnDef, ForeignKey
 
 
-def parse_sql_schema(sql_content: str, dialect: str = "mysql") -> Dict[str, Dict[str, Any]]:
+def parse_sql_schema(sql: str):
+    result = {}
 
-    tables = {}
+    # پارس کل SQL و استخراج AST
+    expressions = sqlglot.parse(sql)
 
-    # همه دستورات CREATE TABLE رو پیدا کن
-    for stmt in sqlglot.parse(sql_content, read=dialect):
-        if not stmt or not isinstance(stmt, exp.Create) or stmt.kind != "TABLE":
-            continue
+    for expr in expressions:
+        if isinstance(expr, Create):
+            table_name = expr.this.name
+            result[table_name] = {
+                "columns": {},
+                "primary_key": None,
+                "foreign_keys": {}
+            }
 
-        # نام جدول رو خیلی ساده و امن بگیر (حتی اگر `users` یا users یا `mydb`.`users`)
-        table_name = stmt.this.name if hasattr(stmt.this, "name") else "unknown_table"
-        # اگر schema هم داشت (مثل mydb.users) فقط اسم جدول رو نگه دار
-        if "." in table_name:
-            table_name = table_name.split(".")[-1]
-        table_name = table_name.strip('`"\'')  # حذف ` " '
+            # پیمایش عناصر داخل CREATE TABLE
+            for col in expr.expression.expressions:
+                # --- ستون‌ها ---
+                if isinstance(col, ColumnDef):
+                    col_name = col.name
+                    col_type = col.args.get("kind")
+                    result[table_name]["columns"][col_name] = col_type.sql()
 
-        columns = {}
-        primary_key = None
-        foreign_keys = {}
+                    # چک کردن PRIMARY KEY داخل تعریف ستون
+                    if col.args.get("constraints"):
+                        for c in col.args["constraints"]:
+                            if c.__class__.__name__ == "PrimaryKeyColumnConstraint":
+                                result[table_name]["primary_key"] = col_name
 
-        # تمام چیزایی که داخل پرانتز هست
-        for expr in stmt.expression.expressions:
+                # --- FOREIGN KEY ها ---
+                if isinstance(col, ForeignKey):
+                    fk_column = col.expression.this.name
+                    ref_table = col.references.this.name
+                    ref_column = col.references.expression.this.name
 
-            # ستون معمولی: id INT, name VARCHAR(255)
-            if isinstance(expr, exp.ColumnDef):
-                col_name = expr.this.name
-                col_type = str(expr.kind).upper() if expr.kind else "UNKNOWN"
-                columns[col_name] = col_type
-
-                # اگر PRIMARY KEY داخل ستون بود
-                if expr.find(exp.PrimaryKeyColumnConstraint):
-                    primary_key = col_name
-
-            # FOREIGN KEY — مهم‌ترین بخش
-            elif isinstance(expr, exp.ForeignKey):
-                local_cols = [c.name for c in expr.this.expressions]
-                ref_table = expr.args["reference"].this.name
-                if "." in ref_table:
-                    ref_table = ref_table.split(".")[-1]  # فقط اسم جدول
-                ref_table = ref_table.strip('`"\'')
-                ref_cols = [c.name for c in expr.args["reference"].expressions]
-
-                for local, ref_col in zip(local_cols, ref_cols):
-                    foreign_keys[local] = {
+                    result[table_name]["foreign_keys"][fk_column] = {
                         "ref_table": ref_table,
-                        "ref_column": ref_col
+                        "ref_column": ref_column
                     }
 
-            # PRIMARY KEY جداگانه: PRIMARY KEY (id)
-            elif isinstance(expr, exp.PrimaryKey):
-                if expr.this:
-                    primary_key = expr.this[0].this.name
+            # اگر Primary Key در ستون‌ها نبود، از table-level constraint پیدا کن
+            if not result[table_name]["primary_key"]:
+                for c in expr.expression.args.get("constraints", []):
+                    if c.__class__.__name__ == "PrimaryKey":
+                        result[table_name]["primary_key"] = c.expressions[0].name
 
-        # اگر هیچ PK پیدا نشد، اولین ستون رو PK فرض کن (برای تست)
-        if not primary_key and columns:
-            primary_key = next(iter(columns))
-
-        tables[table_name] = {
-            "columns": columns,
-            "primary_key": primary_key,
-            "foreign_keys": foreign_keys
-        }
-
-    return tables
+    return result
