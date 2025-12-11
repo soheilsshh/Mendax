@@ -116,4 +116,10 @@ media/
 
 test1.py
 task.txt
-test_parser_unit.py
+
+# Test outputs
+demo_output_*.log
+insert_statements_*.sql
+tests/outputs/
+tests/*.log
+tests/*.sql
