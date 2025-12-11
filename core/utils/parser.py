@@ -12,6 +12,8 @@ import logging
 import re
 from typing import Dict, Any, Optional, Tuple, List
 
+from core.exceptions import SchemaParsingError
+
 # Set up logging
 logging.basicConfig(level=logging.ERROR)
 
@@ -44,7 +46,7 @@ def parse_sql_schema(sql_content: str) -> Dict[str, Dict[str, Any]]:
         }
     """
     result = {}
-    
+
     try:
         # Parse SQL statements
         statements = sqlparse.parse(sql_content)
@@ -62,7 +64,7 @@ def parse_sql_schema(sql_content: str) -> Dict[str, Dict[str, Any]]:
                     continue
                 
                 # Initialize table entry
-                result[table_name] = {
+            result[table_name] = {
                     'columns': {},
                     'primary_key': None,
                     'foreign_keys': {}
@@ -78,7 +80,7 @@ def parse_sql_schema(sql_content: str) -> Dict[str, Dict[str, Any]]:
                 
     except Exception as e:
         logging.error("Failed to parse SQL content: %s", str(e))
-        return result
+        raise SchemaParsingError(f"Failed to parse SQL content: {str(e)}") from e
     
     return result
 

@@ -610,6 +610,90 @@ class TestGraphModule(unittest.TestCase):
         self.assertEqual(set(order), {'table_a', 'table_b', 'table_c'})
 
 
+class TestSchemaService(unittest.TestCase):
+    """Test cases for the SchemaService layer."""
+    
+    def test_service_process_schema(self):
+        """Test the main service method."""
+        from core.services.schema_service import SchemaService
+        
+        sql_content = """
+        CREATE TABLE countries (
+          id INT PRIMARY KEY,
+          name VARCHAR(100)
+        );
+
+        CREATE TABLE users (
+          id INT PRIMARY KEY,
+          username VARCHAR(50),
+          country_id INT,
+          FOREIGN KEY (country_id) REFERENCES countries(id)
+        );
+        """
+        
+        service = SchemaService()
+        result = service.process_schema(sql_content, num_records=5, export_sql=True)
+        
+        # Verify result structure
+        self.assertIn('schema', result)
+        self.assertIn('insertion_order', result)
+        self.assertIn('data', result)
+        self.assertIn('sql', result)
+        self.assertIn('metadata', result)
+        
+        # Verify data
+        self.assertIn('countries', result['data'])
+        self.assertIn('users', result['data'])
+        self.assertEqual(len(result['data']['countries']), 5)
+        self.assertEqual(len(result['data']['users']), 5)
+        
+        # Verify insertion order
+        self.assertEqual(result['insertion_order'], ['countries', 'users'])
+        
+        # Verify SQL export
+        self.assertIn('INSERT INTO', result['sql'])
+        self.assertIn('countries', result['sql'])
+        self.assertIn('users', result['sql'])
+    
+    def test_service_with_custom_config(self):
+        """Test service with custom generator configuration."""
+        from core.services.schema_service import SchemaService
+        from core.utils.generators.config import GeneratorConfig
+        
+        sql_content = """
+        CREATE TABLE test (
+          id INT PRIMARY KEY,
+          name VARCHAR(50)
+        );
+        """
+        
+        config = GeneratorConfig(seed=42, locale='en_US')
+        service = SchemaService(generator_config=config)
+        result = service.process_schema(sql_content, num_records=3)
+        
+        self.assertIn('test', result['data'])
+        self.assertEqual(len(result['data']['test']), 3)
+    
+    def test_service_parse_only(self):
+        """Test parse_only method."""
+        from core.services.schema_service import SchemaService
+        
+        sql_content = """
+        CREATE TABLE test (
+          id INT PRIMARY KEY,
+          name VARCHAR(50)
+        );
+        """
+        
+        service = SchemaService()
+        result = service.parse_only(sql_content)
+        
+        self.assertIn('schema', result)
+        self.assertIn('insertion_order', result)
+        self.assertIn('has_cycles', result)
+        self.assertFalse(result['has_cycles'])
+
+
 if __name__ == '__main__':
     unittest.main()
 
