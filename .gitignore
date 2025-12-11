@@ -115,3 +115,5 @@ media/
 !**/migrations/__init__.py
 
 test1.py
+task.txt
+test_parser_unit.py
