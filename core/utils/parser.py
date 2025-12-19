@@ -64,11 +64,11 @@ def parse_sql_schema(sql_content: str) -> Dict[str, Dict[str, Any]]:
                     continue
                 
                 # Initialize table entry
-            result[table_name] = {
-                    'columns': {},
-                    'primary_key': None,
-                    'foreign_keys': {}
-                }
+                result[table_name] = {
+                        'columns': {},
+                        'primary_key': None,
+                        'foreign_keys': {}
+                    }
                 
                 # Extract columns, primary keys, and foreign keys
                 _parse_table_definition(stmt_str, result[table_name])
